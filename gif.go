@@ -12,6 +12,8 @@ import (
 	"testing"
 )
 
+var floor = uint8(16) // the minimum value for r, g, b to set a 'floor', below which is reserved
+
 func init() {
 	if testing.Testing() {
 		slog.SetLogLoggerLevel(slog.LevelDebug)
@@ -35,7 +37,6 @@ func Read(file string) (*gif.GIF, error) {
 		"path", file,
 		"height", gif.Config.Height,
 		"width", gif.Config.Width,
-		// "color_model_len", gif.Config.ColorModel,
 		"frames", len(gif.Image),
 		"background", gif.BackgroundIndex,
 		"loop", gif.LoopCount,
@@ -54,82 +55,65 @@ func newSecret(length int) ([]byte, error) {
 
 // set floor takes all rgb values below the floor and sets them to floor,
 // freeing space for encoding cypertext.
-func setFloor(in, out string) ([]byte, error) {
-	floor := uint8(64)
-	var altered int
+func encode(data []byte, inFile, outFile string) ([]byte, error) {
+	nibbles := toNibbles(data)
+	slog.Debug("crushed bytes to nibbles", "nibbles", len(nibbles), "bytes", len(data))
 
-	g, err := Read(in)
+	g, err := Read(inFile)
 	if err != nil {
-		return nil, fmt.Errorf("read %q: %w", in, err)
+		return nil, fmt.Errorf("read %q: %w", inFile, err)
 	}
-	for _, img := range g.Image {
-		// slog.Debug("frame",
-		// 	"index", i,
-		// 	"bounds", img.Bounds(),
-		// 	"delay", g.Delay[i],
-		// 	// "palette", img.Palette,
-		// 	// "pixels", img.Pix,
-		// )
-		bounds := img.Bounds()
-		// slog.Debug("frame bounds",
-		// 	"x_min", bounds.Min.X,
-		// 	"x_max", bounds.Max.X,
-		// 	"y_min", bounds.Min.Y,
-		// 	"y_max", bounds.Max.Y,
-		// )
 
+	currentNibble := 0
+	lastNibble := len(nibbles)
+	var done bool
+	for i, img := range g.Image {
+		if done {
+			slog.Debug("done writing", "frame", i)
+			break
+		}
+		bounds := img.Bounds()
 		for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 			for x := bounds.Min.X; x < bounds.Max.X; x++ {
-
-				// slog.Debug("pixel",
-				// 	"x", x,
-				// 	"y", y,
-				// 	"color", img.At(x, y),
-				// )
-
-				var changed bool
 				r, g, b, a := img.At(x, y).RGBA()
 				r8 := uint8(r >> 8)
 				g8 := uint8(g >> 8)
 				b8 := uint8(b >> 8)
 
-				if r8 < floor {
-					r8 = floor
-					changed = true
-				}
-				if g8 < floor {
-					g8 = floor
-					changed = true
-				}
-				if b8 < floor {
-					b8 = floor
-					changed = true
+				var alter bool
+				// pixel color is below floor and eligible for placing data
+				if r8 <= floor {
+					alter = true
+					// write the next nibble
+					if currentNibble < lastNibble {
+						r8 = nibbles[currentNibble]
+						currentNibble++
+						slog.Info("wriring data", "r8", r8, "currentNibble", currentNibble, "frame", i)
+					} else if currentNibble == lastNibble {
+						// write the last byte at the floor
+						r8 = floor
+						currentNibble++
+						slog.Warn("writing end marker", "r8", r8, "currentNibble", currentNibble, "frame", i)
+						done = true
+					}
 				}
 
-				if changed {
+				if alter {
 					img.Set(x, y, color.RGBA{R: r8, G: g8, B: b8, A: uint8(a >> 8)})
-					altered++
 				}
-
-				// if i == 10 {
-				// 	slog.Debug("pixel",
-				// 		"x", x,
-				// 		"y", y,
-				// 		"color", img.At(x, y),
-				// 		"rgba", fmt.Sprintf("%d %d %d %d", r, g, b, a),
-				// 		"changed", changed,
-				// 	)
-				// }
-
 			}
 		}
 	}
 
-	// write changes to out file
+	if currentNibble < len(nibbles) {
+		// TODO be detailed
+		return nil, fmt.Errorf("not enough space")
+	}
 
-	f, err := os.Create(out)
+	// write changes to out file
+	f, err := os.Create(outFile)
 	if err != nil {
-		return nil, fmt.Errorf("create file %q: %w", out, err)
+		return nil, fmt.Errorf("create file %q: %w", outFile, err)
 	}
 	defer f.Close()
 
@@ -138,7 +122,80 @@ func setFloor(in, out string) ([]byte, error) {
 		return nil, fmt.Errorf("encode gif: %w", err)
 	}
 
-	slog.Debug("altered pixels", "count", altered)
+	slog.Debug("data written", "nibbles", currentNibble) // don't include end marker
 
 	return nil, nil
+}
+
+func decode(inFile string) ([]byte, error) {
+	slog.Debug("decoding", "file", inFile)
+	g, err := Read(inFile)
+	if err != nil {
+		return nil, fmt.Errorf("read %q: %w", inFile, err)
+	}
+
+	// var nibbles []uint8
+	for i, img := range g.Image {
+		bounds := img.Bounds()
+		for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+			for x := bounds.Min.X; x < bounds.Max.X; x++ {
+				r, _, _, _ := img.At(x, y).RGBA()
+				r8 := uint8(r >> 8)
+				if i == 0 && y == 0 && r8 <= floor {
+					slog.Debug("found value", "r8", r8, "floor", floor, "frame", i, "x", x, "y", y)
+				}
+
+				// if r8 == floor {
+				// 	slog.Debug("end marker reached", "frame", i, "x", x, "y", y)
+				// 	return toBytes(nibbles), nil
+				// }
+				// if r8 < floor {
+				// 	slog.Warn("value detected", "r8", r8, "frame", i, "x", x, "y", y)
+				// 	nibbles = append(nibbles, r8)
+				// }
+			}
+		}
+	}
+	return nil, fmt.Errorf("no end marker found")
+}
+
+func splitNibbles(b byte) (byte, byte) {
+	return b >> 4, b & 0x0f
+}
+
+func joinNibbles(n1, n2 byte) byte {
+	return n1<<4 | n2
+}
+
+// toNibbles takes a byte slice and returns a slice of nibbles,
+// guaranteed to be even in length.
+func toNibbles(bytes []byte) []uint8 {
+	var crushed []uint8
+	for _, b := range bytes {
+		n1, n2 := splitNibbles(b)
+		crushed = append(crushed, n1, n2)
+	}
+	slog.Info("crushed", "len_nib", len(crushed), "len_bytes", len(bytes))
+	return crushed
+}
+
+// toBytes takes an even length slice of nibbles and returns a byte slice.
+func toBytes(nibbles []uint8) []byte {
+	var stretched []byte
+
+	if len(nibbles)%2 != 0 {
+		slog.Warn("odd number of nibbles, dropping last", "len", len(nibbles))
+		nibbles = nibbles[:len(nibbles)-1]
+	}
+
+	for i := 0; i < len(nibbles); i += 2 {
+		slog.Info("stretched", "i", i, "len", len(nibbles))
+		if len(nibbles) < i+1 {
+			stretched = append(stretched, nibbles[i])
+			return stretched
+		} else {
+			stretched = append(stretched, joinNibbles(nibbles[i], nibbles[i+1]))
+		}
+	}
+	return stretched
 }

@@ -20,6 +20,41 @@ func TestNewSecret(t *testing.T) {
 }
 
 func TestEncode(t *testing.T) {
-	_, err := setFloor(path.Join("img", "wiki.gif"), path.Join("img", "wiki_out.gif"))
+	// secret, err := newSecret(10)
+	// require.NoError(t, err)
+
+	secret := []byte("hello world")
+
+	_, err := encode(secret, path.Join("img", "wiki.gif"), path.Join("img", "wiki_out.gif"))
 	require.NoError(t, err)
+
+	result, err := decode(path.Join("img", "wiki_out.gif"))
+	require.NoError(t, err)
+
+	t.Logf("original: %v", string(secret))
+	t.Logf("result: %v", string(result))
+
+	// require.Equal(t, len(secret), len(result))
+}
+
+func TestSplitAndJoinNibbles(t *testing.T) {
+	max := 255
+	for i := 0; i < max; i++ {
+		n1, n2 := splitNibbles(byte(i))
+		b := joinNibbles(n1, n2)
+		require.Equal(t, byte(i), b)
+		// t.Logf("byte: %d, nibbles: %d, %d\n", i, n1, n2)
+	}
+}
+
+func TestCrushAndStretch(t *testing.T) {
+	secret, err := newSecret(32)
+	require.NoError(t, err)
+	crushed := toNibbles(secret)
+	stretched := toBytes(crushed)
+	require.Equal(t, secret, stretched)
+	t.Log("original: ", secret)
+	t.Log("crushed: ", crushed)
+	t.Log("stretched: ", stretched)
+	require.Equal(t, len(secret)*2, len(crushed))
 }
