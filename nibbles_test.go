@@ -1,29 +1,60 @@
 package cryptogif
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
-func TestSplitAndJoinNibbles(t *testing.T) {
-	max := 255
-	for i := 0; i < max; i++ {
-		n1, n2 := splitNibbles(byte(i))
-		b := joinNibbles(n1, n2)
-		require.Equal(t, byte(i), b)
-		// t.Logf("byte: %d, nibbles: %d, %d\n", i, n1, n2)
+func TestBytesAndNibbles(t *testing.T) {
+	for secretLen := range 1028 {
+		t.Run(fmt.Sprintf("bytesNibs-%d", secretLen+1), func(t *testing.T) {
+			t.Parallel()
+			secret, err := newSecret(secretLen + 1)
+			require.NoError(t, err)
+
+			nibbles, err := toNibbles(secret)
+			require.NoError(t, err)
+
+			bytes, err := toBytes(nibbles)
+			require.NoError(t, err)
+
+			require.Equal(t, len(secret)*2, len(nibbles))
+			require.Equal(t, secret, bytes)
+			t.Logf("Expect: %x\nActual: %x\n", secret, bytes)
+		})
+
 	}
 }
 
-func TestCrushAndStretch(t *testing.T) {
-	secret, err := newSecret(32)
-	require.NoError(t, err)
-	crushed := toNibbles(secret)
-	stretched := toBytes(crushed)
-	require.Equal(t, secret, stretched)
-	// t.Log("original: ", secret)
-	// t.Log("crushed: ", crushed)
-	// t.Log("stretched: ", stretched)
-	require.Equal(t, len(secret)*2, len(crushed))
+func TestSpecialCases(t *testing.T) {
+	t.Run("odd characters", func(t *testing.T) {
+		t.Parallel()
+		original := []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x3c}
+		nibbles, err := toNibbles(original)
+		require.NoError(t, err)
+		require.NotNil(t, nibbles)
+
+		bytes, err := toBytes(nibbles)
+		require.NoError(t, err)
+		require.NotNil(t, bytes)
+
+		require.Equal(t, string(original), string(bytes))
+		t.Logf("\nExpect: %s\nActual: %s\n", original, bytes)
+	})
+	t.Run("special characters", func(t *testing.T) {
+		t.Parallel()
+		original := []byte("hello <> world")
+		nibbles, err := toNibbles(original)
+		require.NoError(t, err)
+		require.NotNil(t, nibbles)
+
+		bytes, err := toBytes(nibbles)
+		require.NoError(t, err)
+		require.NotNil(t, bytes)
+
+		require.Equal(t, string(original), string(bytes))
+		t.Logf("\nExpect: %s\nActual: %s\n", original, bytes)
+	})
 }

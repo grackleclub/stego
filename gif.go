@@ -11,7 +11,11 @@ import (
 	"testing"
 )
 
-var floor = 16 // the minimum value for r, g, b to set a 'floor', below which is reserved
+// The 'floor' is the central concept which drives encoding of data.
+// Of the up to 256 colors in each gif frame's palette, the darkest colors,
+// defined as ranked in tone below floor, are altered (assigned to the palette at floor+1),
+// leaving space below the floor for encoding data.
+var floor = 16
 
 func init() {
 	if testing.Testing() {
@@ -56,7 +60,10 @@ func Encode(g *gif.GIF, data []byte) (*gif.GIF, error) {
 	b64 := base64.StdEncoding.EncodeToString(data)
 	slog.Debug("encoding to base64", "data", b64)
 
-	nibbles := toNibbles([]byte(b64))
+	nibbles, err := toNibbles([]byte(b64))
+	if err != nil {
+		return nil, fmt.Errorf("to nibbles: %w", err)
+	}
 	slog.Debug("crushed bytes to nibbles", "nibbles", len(nibbles), "bytes", len(data))
 	slog.Debug("palette homogeneity", "is_same", isCommonPalette(g))
 
@@ -83,6 +90,9 @@ func Encode(g *gif.GIF, data []byte) (*gif.GIF, error) {
 					if currentNibble > lastNibble {
 						// backfill with floor
 						img.Set(x, y, paletteByTone[floor+1].color)
+						// TODO this would run much faster if we didn't "backfill"
+						// one option is to use an end marker or otherwise encode data length
+						// with headers or footers
 					} else {
 						// or write the next nibble
 						n := nibbles[currentNibble]
@@ -145,9 +155,13 @@ func Decode(g *gif.GIF) ([]byte, error) {
 			}
 		}
 	}
-	bytes, err := base64.StdEncoding.DecodeString(string(toBytes(nibbles)))
+	bytes, err := toBytes(nibbles)
+	if err != nil {
+		return nil, fmt.Errorf("to bytes: %w", err)
+	}
+	result, err := base64.StdEncoding.DecodeString(string(bytes))
 	if err != nil {
 		return nil, fmt.Errorf("decode base64: %w", err)
 	}
-	return bytes, nil
+	return result, nil
 }
