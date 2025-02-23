@@ -1,7 +1,9 @@
 package cryptogif
 
 import (
+	"crypto/rand"
 	"encoding/base64"
+	"fmt"
 	"path"
 	"testing"
 
@@ -18,6 +20,16 @@ func TestRead(t *testing.T) {
 	require.NoError(t, err)
 }
 
+// newSecret generates a random secret of the given length, for testing.
+func newSecret(length int) ([]byte, error) {
+	secret := make([]byte, length)
+	_, err := rand.Read(secret)
+	if err != nil {
+		return nil, fmt.Errorf("generate secret: %w", err)
+	}
+	return secret, nil
+}
+
 func TestNewSecret(t *testing.T) {
 	secret, err := newSecret(32)
 	require.NoError(t, err)
@@ -32,10 +44,10 @@ func TestEncode(t *testing.T) {
 
 	b64 := base64.StdEncoding.EncodeToString([]byte(secret))
 
-	err := encode([]byte(b64), testSource, testDest)
+	err := Encode([]byte(b64), testSource, testDest)
 	require.NoError(t, err)
 
-	resultBytes, err := decode(testDest)
+	resultBytes, err := Decode(testDest)
 	require.NoError(t, err)
 
 	var result = make([]byte, len(resultBytes))

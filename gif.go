@@ -2,26 +2,16 @@ package cryptogif
 
 import (
 	"bytes"
-	"crypto/rand"
 	"fmt"
 	"image/color"
 	"image/gif"
 	"log/slog"
 	"os"
 	"path/filepath"
-	"sort"
 	"testing"
 )
 
-var floor = uint8(16) // the minimum value for r, g, b to set a 'floor', below which is reserved
-
-// palette info
-type paletteInfo struct {
-	color    color.Color // color in palette
-	index    uint8       // index in palette
-	tone     int         // sum of r, g, b
-	toneRank int         // rank based on darkness
-}
+var floor = 16 // the minimum value for r, g, b to set a 'floor', below which is reserved
 
 func init() {
 	if testing.Testing() {
@@ -29,6 +19,7 @@ func init() {
 	}
 }
 
+// Read reads the gif at file and returns the gif.GIF.
 func Read(file string) (*gif.GIF, error) {
 	if filepath.Ext(file) != ".gif" {
 		return nil, fmt.Errorf("file %q is not a gif", file)
@@ -53,9 +44,9 @@ func Read(file string) (*gif.GIF, error) {
 	return gif, nil
 }
 
-// set floor takes all rgb values below the floor and sets them to floor,
-// freeing space for encoding cypertext.
-func encode(data []byte, inFile, outFile string) error {
+// Encode writes the data to be encoded into the gif at inFile,
+// writing the result to outFile.
+func Encode(data []byte, inFile, outFile string) error {
 	nibbles := toNibbles(data)
 	slog.Debug("crushed bytes to nibbles", "nibbles", len(nibbles), "bytes", len(data))
 
@@ -84,10 +75,10 @@ func encode(data []byte, inFile, outFile string) error {
 				index := pal.Index(img.At(x, y))
 				p := paletteByIndex[i][index]
 				paletteByTone := sortByTone(paletteByIndex[i])
-				if p.toneRank <= 16 {
+				if p.toneRank <= floor {
 					if currentNibble > lastNibble {
 						// backfill with floor
-						img.Set(x, y, paletteByTone[17].color)
+						img.Set(x, y, paletteByTone[floor+1].color)
 					} else {
 						// or write the next nibble
 						n := nibbles[currentNibble]
@@ -99,6 +90,9 @@ func encode(data []byte, inFile, outFile string) error {
 				}
 			}
 		}
+	}
+	if currentNibble <= lastNibble {
+		return fmt.Errorf("not enough space in gif to encode %d bytes", len(data))
 	}
 
 	f, err := os.Create(outFile)
@@ -115,7 +109,8 @@ func encode(data []byte, inFile, outFile string) error {
 	return nil
 }
 
-func decode(inFile string) ([]byte, error) {
+// Decode reads the gif at inFile and returns the embedded data.
+func Decode(inFile string) ([]byte, error) {
 	slog.Debug("decoding", "file", inFile)
 	g, err := Read(inFile)
 	if err != nil {
@@ -132,12 +127,9 @@ func decode(inFile string) ([]byte, error) {
 		bounds := img.Bounds()
 		for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 			for x := bounds.Min.X; x < bounds.Max.X; x++ {
-				if len(nibbles) > 128 {
-					return toBytes(nibbles), nil
-				}
 				index := img.Palette.Index(img.At(x, y))
 				p := paletteByIndex[i][index]
-				if p.toneRank <= 16 {
+				if p.toneRank <= floor {
 					slog.Debug("reading nibble", "value", p.toneRank, "frame", i, "x", x, "y", y)
 					nibbles = append(nibbles, uint8(p.toneRank))
 				}
@@ -147,6 +139,7 @@ func decode(inFile string) ([]byte, error) {
 	return toBytes(nibbles), nil
 }
 
+// isCommonPalette returns true if the palette is the same across all frames.
 func isCommonPalette(g *gif.GIF) bool {
 	var palettes []color.Palette
 	for _, img := range g.Image {
@@ -163,52 +156,4 @@ func isCommonPalette(g *gif.GIF) bool {
 		}
 	}
 	return true
-}
-
-func newPaletteInfo(g *gif.GIF) ([][]paletteInfo, error) {
-	assumedLen := 256
-	var pisResults [][]paletteInfo = make([][]paletteInfo, 0)
-	for _, img := range g.Image {
-		if len(img.Palette) != assumedLen {
-			return nil, fmt.Errorf("palette length: got %d, expected %v", len(img.Palette), assumedLen)
-		}
-		pis := make([]paletteInfo, assumedLen)
-		for i, color := range img.Palette {
-			r, g, b, _ := color.RGBA()
-			sum := r>>8 + g>>8 + b>>8
-			pis[i].tone = int(sum)
-			pis[i].color = color
-			pis[i].index = uint8(i)
-		}
-
-		ranking := make([]paletteInfo, len(pis))
-		copy(ranking, pis)
-		sort.Slice(ranking, func(i, j int) bool {
-			return ranking[i].tone < ranking[j].tone
-		})
-
-		for rank, cpy := range ranking {
-			pis[cpy.index].toneRank = rank
-		}
-		pisResults = append(pisResults, pis)
-	}
-	return pisResults, nil
-}
-
-func sortByTone(pis []paletteInfo) []paletteInfo {
-	result := make([]paletteInfo, len(pis))
-	copy(result, pis)
-	sort.Slice(result, func(i, j int) bool {
-		return result[i].tone < result[j].tone
-	})
-	return result
-}
-
-func newSecret(length int) ([]byte, error) {
-	secret := make([]byte, length)
-	_, err := rand.Read(secret)
-	if err != nil {
-		return nil, fmt.Errorf("generate secret: %w", err)
-	}
-	return secret, nil
 }
