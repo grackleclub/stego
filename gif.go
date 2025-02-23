@@ -79,7 +79,7 @@ func encode(data []byte, inFile, outFile string) ([]byte, error) {
 			for x := bounds.Min.X; x < bounds.Max.X; x++ {
 				index := pal.Index(img.At(x, y))
 				p := pi[index]
-				if p.toneRank < 4 {
+				if p.toneRank > 250 {
 					img.Set(x, y, pi[0].color)
 				}
 			}
