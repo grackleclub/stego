@@ -37,23 +37,15 @@ func TestNewSecret(t *testing.T) {
 }
 
 func TestEncode(t *testing.T) {
+	tests := 10
 
-	tests := 3
-	len := 8
-	for i := range tests {
-		l := len * (i + 1)
-		secret, err := newSecret(l)
-		require.NoError(t, err)
-
-		g, err := Read(testSource)
-		require.NoError(t, err)
-
-		gNew, err := Encode(g, secret)
-		require.NoError(t, err)
-
-		text, err := Decode(gNew)
-		require.NoError(t, err)
-		require.Equal(t, secret, text)
+	for testNum := range tests {
+		t.Run(fmt.Sprintf("test-%d", testNum), func(t *testing.T) {
+			t.Parallel()
+			expect, actual, err := EncodeDecode(testSource, 0+testNum)
+			require.NoError(t, err)
+			require.Equal(t, expect, actual)
+		})
 	}
 }
 
@@ -62,4 +54,26 @@ func TestNewPI(t *testing.T) {
 	require.NoError(t, err)
 	_, err = newPaletteInfo(g)
 	require.NoError(t, err)
+}
+
+// EncodeDecode reads a gif, encodes a random secret, then decodes it,
+// returning the input and output secrets for comparison in a test context.
+func EncodeDecode(path string, len int) ([]byte, []byte, error) {
+	g, err := Read(path)
+	if err != nil {
+		return nil, nil, fmt.Errorf("read: %w", err)
+	}
+	input, err := newSecret(len)
+	if err != nil {
+		return nil, nil, fmt.Errorf("new secret: %w", err)
+	}
+	gNew, err := Encode(g, input)
+	if err != nil {
+		return nil, nil, fmt.Errorf("encode: %w", err)
+	}
+	output, err := Decode(gNew)
+	if err != nil {
+		return nil, nil, fmt.Errorf("decode: %w", err)
+	}
+	return input, output, nil
 }

@@ -19,7 +19,7 @@ func init() {
 	}
 }
 
-// Read reads the gif at file and returns a pointer *gif.GIF.
+// Read reads the gif at file and returns a pointer to *gif.GIF.
 func Read(file string) (*gif.GIF, error) {
 	if filepath.Ext(file) != ".gif" {
 		return nil, fmt.Errorf("file %q is not a gif", file)
@@ -32,7 +32,10 @@ func Read(file string) (*gif.GIF, error) {
 	if err != nil {
 		return nil, fmt.Errorf("decode gif: %w", err)
 	}
-
+	info, err := os.Stat(file)
+	if err != nil {
+		return nil, fmt.Errorf("stat file %q: %w", file, err)
+	}
 	slog.Debug("file read",
 		"path", file,
 		"height", gif.Config.Height,
@@ -40,10 +43,15 @@ func Read(file string) (*gif.GIF, error) {
 		"frames", len(gif.Image),
 		"background", gif.BackgroundIndex,
 		"loop", gif.LoopCount,
+		"size", info.Size(),
 	)
 	return gif, nil
 }
 
+// Encode first converts data to base64, then to nibbles,
+// altering the gif to provide a "floor" for cyphertext,
+// inserting data one nibble at a time until completion,
+// or exhaustion of the gif's capacity.
 func Encode(g *gif.GIF, data []byte) (*gif.GIF, error) {
 	b64 := base64.StdEncoding.EncodeToString(data)
 	slog.Debug("encoding to base64", "data", b64)
@@ -87,13 +95,13 @@ func Encode(g *gif.GIF, data []byte) (*gif.GIF, error) {
 			}
 		}
 	}
-	if currentNibble <= lastNibble {
+	if currentNibble < lastNibble {
 		return nil, fmt.Errorf("not enough space in gif to encode %d bytes", len(data))
 	}
 	return g, nil
 }
 
-// Write encodes the gif and writes it to the file at path.
+// Write encodes the gif as given, and writes it to the file at path.
 func Write(g *gif.GIF, path string) error {
 	f, err := os.Create(path)
 	if err != nil {
@@ -105,9 +113,18 @@ func Write(g *gif.GIF, path string) error {
 	if err != nil {
 		return fmt.Errorf("encode gif: %w", err)
 	}
+	info, err := f.Stat()
+	if err != nil {
+		return fmt.Errorf("stat file %q: %w", path, err)
+	}
+	slog.Debug("file written", "path", path, "size", info.Size())
 	return nil
 }
 
+// Decode reads the gif and decodes the data expecting the same as Encode:
+//   - base64 encoded data
+//   - crushed to nibbles
+//   - inserted into the gif at image palette[0] through palette[floor]
 func Decode(g *gif.GIF) ([]byte, error) {
 	paletteByIndex, err := newPaletteInfo(g)
 	if err != nil {
