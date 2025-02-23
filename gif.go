@@ -298,6 +298,9 @@ func findMostSimilarColor(palette color.Palette, target color.Color) (color.Colo
 	closestIndex := 0
 
 	for i, c := range palette {
+		if i == 0 || i == 255 {
+			continue
+		}
 		distance := colorDistance(c, target)
 		if distance < minDistance {
 			minDistance = distance
