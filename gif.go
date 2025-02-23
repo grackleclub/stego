@@ -4,13 +4,11 @@ import (
 	"bytes"
 	"crypto/rand"
 	"fmt"
-	"image"
 	"image/color"
 	"image/gif"
 	"log/slog"
 	"os"
 	"path/filepath"
-	"slices"
 	"sort"
 	"testing"
 )
@@ -71,29 +69,22 @@ func encode(data []byte, inFile, outFile string) ([]byte, error) {
 	}
 	slog.Info("common palette", "true", isCommonPalette(g))
 
-	// colorPaletteFx := make([]int, 256)
+	pi := newPI(g)
+	slog.Debug("palette info", "len", len(pi))
 
 	for _, img := range g.Image {
-
-		compressPalette(img)
-
-		// bounds := img.Bounds()
-		// for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
-		// 	for x := bounds.Min.X; x < bounds.Max.X; x++ {
-		// 		// color := img.At(x, y)
-		// 		// index := img.Palette.Index(color)
-		// 		// colorPaletteFx[uint8(index)]++
-		// 		// r8 := uint8(r >> 8)
-		// 		// g8 := uint8(g >> 8)
-		// 		// b8 := uint8(b >> 8)
-		// 		// img.SetColorIndex(x, y, 0)
-		// 	}
-		// }
+		bounds := img.Bounds()
+		pal := img.Palette
+		for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+			for x := bounds.Min.X; x < bounds.Max.X; x++ {
+				index := pal.Index(img.At(x, y))
+				p := pi[index]
+				if p.toneRank < 4 {
+					img.Set(x, y, pi[0].color)
+				}
+			}
+		}
 	}
-
-	// for i, fx := range colorPaletteFx {
-	// 	slog.Debug("color palette fx", "index", i, "fx", fx)
-	// }
 
 	// write changes to out file
 	f, err := os.Create(outFile)
@@ -201,112 +192,44 @@ func isCommonPalette(g *gif.GIF) bool {
 	return true
 }
 
-// colorDistance calculates the Euclidean distance between two colors in the RGB color space.
-func colorDistance(c1, c2 color.Color) float64 {
-	r1, g1, b1, _ := c1.RGBA()
-	r2, g2, b2, _ := c2.RGBA()
-
-	// Convert to 8-bit values
-	r1, g1, b1 = r1>>8, g1>>8, b1>>8
-	r2, g2, b2 = r2>>8, g2>>8, b2>>8
-
-	// Calculate the Euclidean distance
-	dr := float64(r1 - r2)
-	dg := float64(g1 - g2)
-	db := float64(b1 - b2)
-
-	return dr*dr + dg*dg + db*db
+// palette info
+type pi struct {
+	color    color.Color
+	index    uint8
+	tone     int
+	toneRank int
 }
 
-// findMostSimilarColors finds the 16 colors in the palette that are most similar to other colors.
-func findMostSimilarColors(palette color.Palette) []int {
-	type colorPair struct {
-		index1, index2 int
-		distance       float64
+func newPI(g *gif.GIF) []pi {
+	pis := make([]pi, 256)
+	for i, color := range g.Image[0].Palette {
+		r, g, b, _ := color.RGBA()
+		sum := r>>8 + g>>8 + b>>8
+		pis[i].tone = int(sum)
+		pis[i].color = color
+		pis[i].index = uint8(i)
 	}
 
-	var pairs []colorPair
-
-	// Calculate the distance between each pair of colors
-	for i := 0; i < len(palette); i++ {
-		for j := i + 1; j < len(palette); j++ {
-			distance := colorDistance(palette[i], palette[j])
-			pairs = append(pairs, colorPair{i, j, distance})
-		}
-	}
-
-	// Sort the pairs by distance
-	sort.Slice(pairs, func(i, j int) bool {
-		return pairs[i].distance < pairs[j].distance
+	ranking := make([]pi, len(pis))
+	copy(ranking, pis)
+	sort.Slice(ranking, func(i, j int) bool {
+		return ranking[i].tone < ranking[j].tone
 	})
 
-	// Collect the indices of the 16 most similar colors
-	similarColors := make(map[int]struct{})
-	for _, pair := range pairs {
-		if len(similarColors) >= 16 {
-			break
-		}
-		similarColors[pair.index1] = struct{}{}
-		similarColors[pair.index2] = struct{}{}
+	// Assign toneRank based on sorted order
+	for rank, cpy := range ranking {
+		pis[cpy.index].toneRank = rank
 	}
 
-	// Convert the map keys to a slice
-	var indices []int
-	for index := range similarColors {
-		indices = append(indices, index)
-	}
-
-	return indices
+	return pis
 }
 
-// compressPalette removes the 16 most similar colors from the palette and reassigns pixels.
-func compressPalette(img *image.Paletted) {
-	// Find the 16 most similar colors
-	similarColors := findMostSimilarColors(img.Palette)
-
-	// Create a new palette without the 16 most similar colors
-	newPalette := make(color.Palette, 0, len(img.Palette)-16)
-	colorMap := make(map[int]int) // Map old indices to new indices
-	for i, c := range img.Palette {
-		if !slices.Contains(similarColors, i) {
-			colorMap[i] = len(newPalette)
-			newPalette = append(newPalette, c)
-		}
+func tone(g *gif.GIF) []int {
+	tone := make([]int, 256)
+	for i, color := range g.Image[0].Palette {
+		r, g, b, _ := color.RGBA()
+		sum := r>>8 + g>>8 + b>>8
+		tone[i] = int(sum)
 	}
-
-	// Reassign pixels to the closest remaining colors
-	for y := 0; y < img.Bounds().Dy(); y++ {
-		for x := 0; x < img.Bounds().Dx(); x++ {
-			oldIndex := img.ColorIndexAt(x, y)
-			if newIndex, ok := colorMap[int(oldIndex)]; ok {
-				img.SetColorIndex(x, y, uint8(newIndex))
-			} else {
-				// Find the closest remaining color
-				_, closestIndex := findMostSimilarColor(newPalette, img.Palette[oldIndex])
-				img.SetColorIndex(x, y, uint8(closestIndex))
-			}
-		}
-	}
-
-	// Update the image palette
-	img.Palette = newPalette
-}
-
-// findMostSimilarColor finds the most similar color in the palette to the target color.
-func findMostSimilarColor(palette color.Palette, target color.Color) (color.Color, int) {
-	minDistance := float64(1<<32 - 1) // Max float64 value
-	closestIndex := 0
-
-	for i, c := range palette {
-		if i == 0 || i == 255 {
-			continue
-		}
-		distance := colorDistance(c, target)
-		if distance < minDistance {
-			minDistance = distance
-			closestIndex = i
-		}
-	}
-
-	return palette[closestIndex], closestIndex
+	return tone
 }

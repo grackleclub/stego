@@ -58,3 +58,24 @@ func TestCrushAndStretch(t *testing.T) {
 	t.Log("stretched: ", stretched)
 	require.Equal(t, len(secret)*2, len(crushed))
 }
+
+func TestTone(t *testing.T) {
+	g, err := Read(path.Join("img", "wiki.gif"))
+	require.NoError(t, err)
+
+	ranked := tone(g)
+	for i, r := range ranked {
+		t.Logf("ranked %d: %v\n", i, r)
+	}
+}
+
+func TestNewPI(t *testing.T) {
+	g, err := Read(path.Join("img", "wiki.gif"))
+	require.NoError(t, err)
+
+	pi := newPI(g)
+	for _, p := range pi {
+		t.Logf("%v %v %v", p.index, p.tone, p.toneRank)
+	}
+	t.Logf("pi: %v\n", pi)
+}
