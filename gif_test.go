@@ -14,7 +14,7 @@ var (
 )
 
 func TestRead(t *testing.T) {
-	_, err := Read(path.Join("img", "wiki.gif"))
+	_, err := Read(testSource)
 	require.NoError(t, err)
 }
 
@@ -28,7 +28,7 @@ func TestNewSecret(t *testing.T) {
 func TestEncode(t *testing.T) {
 	// secret, err := newSecret(16)
 	// require.NoError(t, err)
-	secret := "hello-there "
+	secret := "hello  there"
 
 	b64 := base64.StdEncoding.EncodeToString([]byte(secret))
 
