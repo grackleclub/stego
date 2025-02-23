@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image/color"
 	"image/gif"
+	"log/slog"
 	"sort"
 )
 
@@ -57,4 +58,33 @@ func sortByTone(pis []paletteInfo) []paletteInfo {
 		return result[i].tone < result[j].tone
 	})
 	return result
+}
+
+// isCommonPalette returns true if the palette is the same across all frames.
+func isCommonPalette(g *gif.GIF) bool {
+	var palettes []color.Palette
+	for _, img := range g.Image {
+		palettes = append(palettes, img.Palette)
+	}
+	for i, palette := range palettes {
+		for j, p := range palette {
+			r0, g0, b0, _ := palettes[0][j].RGBA()
+			r, g, b, _ := p.RGBA()
+			if r != r0 || g != g0 || b != b0 {
+				slog.Debug(
+					"palette found inconsistent with first frame",
+					"frame", i,
+					"palette", j,
+					"r0", r0>>8,
+					"g0", g0>>8,
+					"b0", b0>>8,
+					"r", r>>8,
+					"g", g>>8,
+					"b", b>>8,
+				)
+				return false
+			}
+		}
+	}
+	return true
 }

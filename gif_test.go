@@ -2,7 +2,6 @@ package cryptogif
 
 import (
 	"crypto/rand"
-	"encoding/base64"
 	"fmt"
 	"path"
 	"testing"
@@ -38,29 +37,24 @@ func TestNewSecret(t *testing.T) {
 }
 
 func TestEncode(t *testing.T) {
-	secret, err := newSecret(16)
-	require.NoError(t, err)
-	// secret := "hello  there"
 
-	b64 := base64.StdEncoding.EncodeToString([]byte(secret))
+	tests := 3
+	len := 8
+	for i := range tests {
+		l := len * (i + 1)
+		secret, err := newSecret(l)
+		require.NoError(t, err)
 
-	err = Encode([]byte(b64), testSource, testDest)
-	require.NoError(t, err)
+		g, err := Read(testSource)
+		require.NoError(t, err)
 
-	resultBytes, err := Decode(testDest)
-	require.NoError(t, err)
+		gNew, err := Encode(g, secret)
+		require.NoError(t, err)
 
-	var result = make([]byte, len(resultBytes))
-	n, err := base64.StdEncoding.Decode(result, resultBytes)
-	require.NoError(t, err)
-	result = result[:n]
-
-	t.Logf("original (str): %v", string(secret))
-	t.Logf("original (b64): %v", string(b64))
-	t.Logf("decoded  (b64): %v", string(resultBytes))
-	t.Logf("decoded  (str): %v", string(result))
-
-	require.Equal(t, string(secret), string(result))
+		text, err := Decode(gNew)
+		require.NoError(t, err)
+		require.Equal(t, secret, text)
+	}
 }
 
 func TestNewPI(t *testing.T) {
@@ -68,26 +62,4 @@ func TestNewPI(t *testing.T) {
 	require.NoError(t, err)
 	_, err = newPaletteInfo(g)
 	require.NoError(t, err)
-}
-
-func TestEncode2(t *testing.T) {
-	secret, err := newSecret(16)
-	require.NoError(t, err)
-
-	// b64 := base64.StdEncoding.EncodeToString([]byte(secret))
-
-	g, err := Read(testSource)
-	require.NoError(t, err)
-
-	gif, err := Encode2(g, secret)
-	require.NoError(t, err)
-
-	data, err := Decode2(gif)
-	require.NoError(t, err)
-
-	t.Logf("original (str): %v", string(secret))
-	// t.Logf("original (b64): %v", string(b64))
-	t.Logf("decoded  (b64): %v", string(data))
-
-	require.Equal(t, string(secret), string(data))
 }
