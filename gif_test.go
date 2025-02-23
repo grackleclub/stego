@@ -1,10 +1,16 @@
 package cryptogif
 
 import (
+	"encoding/base64"
 	"path"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+)
+
+var (
+	testSource = path.Join("img", "earth.gif")
+	testDest   = path.Join("img", "earth_out.gif")
 )
 
 func TestRead(t *testing.T) {
@@ -20,50 +26,33 @@ func TestNewSecret(t *testing.T) {
 }
 
 func TestEncode(t *testing.T) {
-	// secret, err := newSecret(10)
+	// secret, err := newSecret(16)
 	// require.NoError(t, err)
+	secret := "hello-there"
 
-	secret := []byte("hello-world")
+	b64 := base64.StdEncoding.EncodeToString([]byte(secret))
 
-	_, err := encode(secret, path.Join("img", "earth.gif"), path.Join("img", "earth_out.gif"))
+	err := encode([]byte(b64), testSource, testDest)
 	require.NoError(t, err)
 
-	result, err := decode(path.Join("img", "earth_out.gif"))
+	resultBytes, err := decode(testDest)
 	require.NoError(t, err)
 
-	t.Logf("original: %v", string(secret))
-	t.Logf("result: %v", string(result))
-
-	require.Equal(t, len(secret), len(result))
-}
-
-func TestSplitAndJoinNibbles(t *testing.T) {
-	max := 255
-	for i := 0; i < max; i++ {
-		n1, n2 := splitNibbles(byte(i))
-		b := joinNibbles(n1, n2)
-		require.Equal(t, byte(i), b)
-		// t.Logf("byte: %d, nibbles: %d, %d\n", i, n1, n2)
-	}
-}
-
-func TestCrushAndStretch(t *testing.T) {
-	secret, err := newSecret(32)
+	var result = make([]byte, len(resultBytes))
+	n, err := base64.StdEncoding.Decode(result, resultBytes)
 	require.NoError(t, err)
-	crushed := toNibbles(secret)
-	stretched := toBytes(crushed)
-	require.Equal(t, secret, stretched)
-	t.Log("original: ", secret)
-	t.Log("crushed: ", crushed)
-	t.Log("stretched: ", stretched)
-	require.Equal(t, len(secret)*2, len(crushed))
+	result = result[:n]
+
+	t.Logf("original: %v", b64)
+	t.Logf("result: %v", string(resultBytes))
+	t.Logf("decoded: %v", string(result))
+
+	require.Equal(t, b64, string(resultBytes))
 }
 
 func TestNewPI(t *testing.T) {
-	g, err := Read(path.Join("img", "wiki.gif"))
+	g, err := Read(path.Join("img", "earth.gif"))
 	require.NoError(t, err)
-
-	pi, err := newPI(g)
+	_, err = newPaletteInfo(g)
 	require.NoError(t, err)
-	t.Logf("pi: %v\n", pi)
 }
