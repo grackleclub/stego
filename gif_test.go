@@ -23,7 +23,7 @@ func TestEncode(t *testing.T) {
 	// secret, err := newSecret(10)
 	// require.NoError(t, err)
 
-	secret := []byte("hello world")
+	secret := []byte("hello-world")
 
 	_, err := encode(secret, path.Join("img", "earth.gif"), path.Join("img", "earth_out.gif"))
 	require.NoError(t, err)
