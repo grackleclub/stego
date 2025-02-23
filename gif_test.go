@@ -28,11 +28,11 @@ func TestEncode(t *testing.T) {
 	_, err := encode(secret, path.Join("img", "wiki.gif"), path.Join("img", "wiki_out.gif"))
 	require.NoError(t, err)
 
-	result, err := decode(path.Join("img", "wiki_out.gif"))
-	require.NoError(t, err)
+	// result, err := decode(path.Join("img", "wiki_out.gif"))
+	// require.NoError(t, err)
 
-	t.Logf("original: %v", string(secret))
-	t.Logf("result: %v", string(result))
+	// t.Logf("original: %v", string(secret))
+	// t.Logf("result: %v", string(result))
 
 	// require.Equal(t, len(secret), len(result))
 }

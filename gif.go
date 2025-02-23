@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"crypto/rand"
 	"fmt"
+	"image"
 	"image/color"
 	"image/gif"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
+	"sort"
 	"testing"
 )
 
@@ -18,6 +21,9 @@ func init() {
 	if testing.Testing() {
 		slog.SetLogLoggerLevel(slog.LevelDebug)
 	}
+}
+
+type nibblePalette struct {
 }
 
 func Read(file string) (*gif.GIF, error) {
@@ -63,52 +69,31 @@ func encode(data []byte, inFile, outFile string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read %q: %w", inFile, err)
 	}
+	slog.Info("common palette", "true", isCommonPalette(g))
 
-	currentNibble := 0
-	lastNibble := len(nibbles)
-	var done bool
-	for i, img := range g.Image {
-		if done {
-			slog.Debug("done writing", "frame", i)
-			break
-		}
-		bounds := img.Bounds()
-		for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
-			for x := bounds.Min.X; x < bounds.Max.X; x++ {
-				r, g, b, a := img.At(x, y).RGBA()
-				r8 := uint8(r >> 8)
-				g8 := uint8(g >> 8)
-				b8 := uint8(b >> 8)
+	// colorPaletteFx := make([]int, 256)
 
-				var alter bool
-				// pixel color is below floor and eligible for placing data
-				if r8 <= floor {
-					alter = true
-					// write the next nibble
-					if currentNibble < lastNibble {
-						r8 = nibbles[currentNibble]
-						currentNibble++
-						slog.Info("wriring data", "r8", r8, "currentNibble", currentNibble, "frame", i)
-					} else if currentNibble == lastNibble {
-						// write the last byte at the floor
-						r8 = floor
-						currentNibble++
-						slog.Warn("writing end marker", "r8", r8, "currentNibble", currentNibble, "frame", i)
-						done = true
-					}
-				}
+	for _, img := range g.Image {
 
-				if alter {
-					img.Set(x, y, color.RGBA{R: r8, G: g8, B: b8, A: uint8(a >> 8)})
-				}
-			}
-		}
+		compressPalette(img)
+
+		// bounds := img.Bounds()
+		// for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		// 	for x := bounds.Min.X; x < bounds.Max.X; x++ {
+		// 		// color := img.At(x, y)
+		// 		// index := img.Palette.Index(color)
+		// 		// colorPaletteFx[uint8(index)]++
+		// 		// r8 := uint8(r >> 8)
+		// 		// g8 := uint8(g >> 8)
+		// 		// b8 := uint8(b >> 8)
+		// 		// img.SetColorIndex(x, y, 0)
+		// 	}
+		// }
 	}
 
-	if currentNibble < len(nibbles) {
-		// TODO be detailed
-		return nil, fmt.Errorf("not enough space")
-	}
+	// for i, fx := range colorPaletteFx {
+	// 	slog.Debug("color palette fx", "index", i, "fx", fx)
+	// }
 
 	// write changes to out file
 	f, err := os.Create(outFile)
@@ -121,8 +106,6 @@ func encode(data []byte, inFile, outFile string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("encode gif: %w", err)
 	}
-
-	slog.Debug("data written", "nibbles", currentNibble) // don't include end marker
 
 	return nil, nil
 }
@@ -198,4 +181,129 @@ func toBytes(nibbles []uint8) []byte {
 		}
 	}
 	return stretched
+}
+
+func isCommonPalette(g *gif.GIF) bool {
+	var palettes []color.Palette
+	for _, img := range g.Image {
+		palettes = append(palettes, img.Palette)
+	}
+	for i, palette := range palettes {
+		for j, p := range palette {
+			r, g, b, _ := p.RGBA()
+			r0, g0, b0, _ := palettes[0][j].RGBA()
+			if r != r0 || g != g0 || b != b0 {
+				slog.Debug("palette mismatch", "i", i, "j", j, "r", r>>8, "g", g>>8, "b", b>>8)
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// colorDistance calculates the Euclidean distance between two colors in the RGB color space.
+func colorDistance(c1, c2 color.Color) float64 {
+	r1, g1, b1, _ := c1.RGBA()
+	r2, g2, b2, _ := c2.RGBA()
+
+	// Convert to 8-bit values
+	r1, g1, b1 = r1>>8, g1>>8, b1>>8
+	r2, g2, b2 = r2>>8, g2>>8, b2>>8
+
+	// Calculate the Euclidean distance
+	dr := float64(r1 - r2)
+	dg := float64(g1 - g2)
+	db := float64(b1 - b2)
+
+	return dr*dr + dg*dg + db*db
+}
+
+// findMostSimilarColors finds the 16 colors in the palette that are most similar to other colors.
+func findMostSimilarColors(palette color.Palette) []int {
+	type colorPair struct {
+		index1, index2 int
+		distance       float64
+	}
+
+	var pairs []colorPair
+
+	// Calculate the distance between each pair of colors
+	for i := 0; i < len(palette); i++ {
+		for j := i + 1; j < len(palette); j++ {
+			distance := colorDistance(palette[i], palette[j])
+			pairs = append(pairs, colorPair{i, j, distance})
+		}
+	}
+
+	// Sort the pairs by distance
+	sort.Slice(pairs, func(i, j int) bool {
+		return pairs[i].distance < pairs[j].distance
+	})
+
+	// Collect the indices of the 16 most similar colors
+	similarColors := make(map[int]struct{})
+	for _, pair := range pairs {
+		if len(similarColors) >= 16 {
+			break
+		}
+		similarColors[pair.index1] = struct{}{}
+		similarColors[pair.index2] = struct{}{}
+	}
+
+	// Convert the map keys to a slice
+	var indices []int
+	for index := range similarColors {
+		indices = append(indices, index)
+	}
+
+	return indices
+}
+
+// compressPalette removes the 16 most similar colors from the palette and reassigns pixels.
+func compressPalette(img *image.Paletted) {
+	// Find the 16 most similar colors
+	similarColors := findMostSimilarColors(img.Palette)
+
+	// Create a new palette without the 16 most similar colors
+	newPalette := make(color.Palette, 0, len(img.Palette)-16)
+	colorMap := make(map[int]int) // Map old indices to new indices
+	for i, c := range img.Palette {
+		if !slices.Contains(similarColors, i) {
+			colorMap[i] = len(newPalette)
+			newPalette = append(newPalette, c)
+		}
+	}
+
+	// Reassign pixels to the closest remaining colors
+	for y := 0; y < img.Bounds().Dy(); y++ {
+		for x := 0; x < img.Bounds().Dx(); x++ {
+			oldIndex := img.ColorIndexAt(x, y)
+			if newIndex, ok := colorMap[int(oldIndex)]; ok {
+				img.SetColorIndex(x, y, uint8(newIndex))
+			} else {
+				// Find the closest remaining color
+				_, closestIndex := findMostSimilarColor(newPalette, img.Palette[oldIndex])
+				img.SetColorIndex(x, y, uint8(closestIndex))
+			}
+		}
+	}
+
+	// Update the image palette
+	img.Palette = newPalette
+}
+
+// findMostSimilarColor finds the most similar color in the palette to the target color.
+func findMostSimilarColor(palette color.Palette, target color.Color) (color.Color, int) {
+	minDistance := float64(1<<32 - 1) // Max float64 value
+	closestIndex := 0
+
+	for i, c := range palette {
+		distance := colorDistance(c, target)
+		if distance < minDistance {
+			minDistance = distance
+			closestIndex = i
+		}
+	}
+
+	return palette[closestIndex], closestIndex
 }
