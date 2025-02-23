@@ -25,16 +25,16 @@ func TestEncode(t *testing.T) {
 
 	secret := []byte("hello world")
 
-	_, err := encode(secret, path.Join("img", "wiki.gif"), path.Join("img", "wiki_out.gif"))
+	_, err := encode(secret, path.Join("img", "earth.gif"), path.Join("img", "earth_out.gif"))
 	require.NoError(t, err)
 
-	// result, err := decode(path.Join("img", "wiki_out.gif"))
-	// require.NoError(t, err)
+	result, err := decode(path.Join("img", "earth_out.gif"))
+	require.NoError(t, err)
 
-	// t.Logf("original: %v", string(secret))
-	// t.Logf("result: %v", string(result))
+	t.Logf("original: %v", string(secret))
+	t.Logf("result: %v", string(result))
 
-	// require.Equal(t, len(secret), len(result))
+	require.Equal(t, len(secret), len(result))
 }
 
 func TestSplitAndJoinNibbles(t *testing.T) {
@@ -59,23 +59,11 @@ func TestCrushAndStretch(t *testing.T) {
 	require.Equal(t, len(secret)*2, len(crushed))
 }
 
-func TestTone(t *testing.T) {
-	g, err := Read(path.Join("img", "wiki.gif"))
-	require.NoError(t, err)
-
-	ranked := tone(g)
-	for i, r := range ranked {
-		t.Logf("ranked %d: %v\n", i, r)
-	}
-}
-
 func TestNewPI(t *testing.T) {
 	g, err := Read(path.Join("img", "wiki.gif"))
 	require.NoError(t, err)
 
-	pi := newPI(g)
-	for _, p := range pi {
-		t.Logf("%v %v %v", p.index, p.tone, p.toneRank)
-	}
+	pi, err := newPI(g)
+	require.NoError(t, err)
 	t.Logf("pi: %v\n", pi)
 }

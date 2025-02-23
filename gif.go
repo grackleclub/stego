@@ -69,18 +69,34 @@ func encode(data []byte, inFile, outFile string) ([]byte, error) {
 	}
 	slog.Info("common palette", "true", isCommonPalette(g))
 
-	pi := newPI(g)
-	slog.Debug("palette info", "len", len(pi))
+	paletteByIndex, err := newPI(g)
+	if err != nil {
+		return nil, fmt.Errorf("new palette info: %w", err)
+	}
 
-	for _, img := range g.Image {
+	var currentNibble int
+	lastNibble := len(nibbles) - 1
+	for i, img := range g.Image {
 		bounds := img.Bounds()
 		pal := img.Palette
 		for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 			for x := bounds.Min.X; x < bounds.Max.X; x++ {
+				// replace dark colors with nibbles of data
 				index := pal.Index(img.At(x, y))
-				p := pi[index]
-				if p.toneRank > 250 {
-					img.Set(x, y, pi[0].color)
+				p := paletteByIndex[i][index]
+				paletteByTone := sortByTone(paletteByIndex[i])
+				if p.toneRank <= 16 {
+					if currentNibble > lastNibble {
+						// backfill with floor
+						img.Set(x, y, paletteByTone[17].color)
+					} else {
+						// or write the next nibble
+						n := nibbles[currentNibble]
+						currentNibble++
+						slog.Debug("writing nibble", "n", n, "frame", i, "x", x, "y", y)
+						newDataColor := paletteByTone[n]
+						img.Set(x, y, newDataColor.color)
+					}
 				}
 			}
 		}
@@ -108,29 +124,42 @@ func decode(inFile string) ([]byte, error) {
 		return nil, fmt.Errorf("read %q: %w", inFile, err)
 	}
 
-	// var nibbles []uint8
+	paletteByIndex, err := newPI(g)
+	if err != nil {
+		return nil, fmt.Errorf("new palette info: %w", err)
+	}
+
+	var nibbles []uint8
 	for i, img := range g.Image {
 		bounds := img.Bounds()
 		for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 			for x := bounds.Min.X; x < bounds.Max.X; x++ {
-				r, _, _, _ := img.At(x, y).RGBA()
-				r8 := uint8(r >> 8)
-				if i == 0 && y == 0 && r8 <= floor {
-					slog.Debug("found value", "r8", r8, "floor", floor, "frame", i, "x", x, "y", y)
+				if len(nibbles) > 128 {
+					return toBytes(nibbles), nil
+				}
+				index := img.Palette.Index(img.At(x, y))
+				p := paletteByIndex[i][index]
+				if p.toneRank <= 16 {
+					nibbles = append(nibbles, uint8(p.toneRank))
 				}
 
-				// if r8 == floor {
-				// 	slog.Debug("end marker reached", "frame", i, "x", x, "y", y)
-				// 	return toBytes(nibbles), nil
-				// }
-				// if r8 < floor {
-				// 	slog.Warn("value detected", "r8", r8, "frame", i, "x", x, "y", y)
-				// 	nibbles = append(nibbles, r8)
+				if x < 100 && y == 0 {
+					slog.Debug("debug", "index", index, "frame", i, "x", x, "y", y)
+				}
+
+				// if index < 16 {
+				// 	slog.Debug("index", "index", index, "frame", i, "x", x, "y", y)
+				// 	nibbles = append(nibbles, uint8(index))
+
+				// 	// TODO temp hard limit
+				// 	if len(nibbles) > 64 {
+				// 		return toBytes(nibbles), nil
+				// 	}
 				// }
 			}
 		}
 	}
-	return nil, fmt.Errorf("no end marker found")
+	return toBytes(nibbles), nil
 }
 
 func splitNibbles(b byte) (byte, byte) {
@@ -157,13 +186,13 @@ func toNibbles(bytes []byte) []uint8 {
 func toBytes(nibbles []uint8) []byte {
 	var stretched []byte
 
+	// TODO fix this hack
 	if len(nibbles)%2 != 0 {
 		slog.Warn("odd number of nibbles, dropping last", "len", len(nibbles))
 		nibbles = nibbles[:len(nibbles)-1]
 	}
 
 	for i := 0; i < len(nibbles); i += 2 {
-		slog.Info("stretched", "i", i, "len", len(nibbles))
 		if len(nibbles) < i+1 {
 			stretched = append(stretched, nibbles[i])
 			return stretched
@@ -194,42 +223,49 @@ func isCommonPalette(g *gif.GIF) bool {
 
 // palette info
 type pi struct {
-	color    color.Color
-	index    uint8
-	tone     int
-	toneRank int
+	color    color.Color // color in palette
+	index    uint8       // index in palette
+	tone     int         // sum of r, g, b
+	toneRank int         // rank based on darkness
 }
 
-func newPI(g *gif.GIF) []pi {
-	pis := make([]pi, 256)
-	for i, color := range g.Image[0].Palette {
-		r, g, b, _ := color.RGBA()
-		sum := r>>8 + g>>8 + b>>8
-		pis[i].tone = int(sum)
-		pis[i].color = color
-		pis[i].index = uint8(i)
-	}
+func newPI(g *gif.GIF) ([][]pi, error) {
+	assumedLen := 256
+	var pisResults [][]pi = make([][]pi, 0)
+	for i, img := range g.Image {
+		if len(img.Palette) != assumedLen {
+			return nil, fmt.Errorf("palette length: got %d, expected %v", len(img.Palette), assumedLen)
+		}
+		pis := make([]pi, assumedLen)
+		for i, color := range img.Palette {
+			r, g, b, _ := color.RGBA()
+			sum := r>>8 + g>>8 + b>>8
+			pis[i].tone = int(sum)
+			pis[i].color = color
+			pis[i].index = uint8(i)
+		}
 
-	ranking := make([]pi, len(pis))
-	copy(ranking, pis)
-	sort.Slice(ranking, func(i, j int) bool {
-		return ranking[i].tone < ranking[j].tone
+		ranking := make([]pi, len(pis))
+		copy(ranking, pis)
+		sort.Slice(ranking, func(i, j int) bool {
+			return ranking[i].tone < ranking[j].tone
+		})
+
+		for rank, cpy := range ranking {
+			pis[cpy.index].toneRank = rank
+		}
+		slog.Debug("palette info being added", "len", len(pis), "frame", i)
+		pisResults = append(pisResults, pis)
+	}
+	slog.Debug("palette info", "len", len(pisResults))
+	return pisResults, nil
+}
+
+func sortByTone(pis []pi) []pi {
+	result := make([]pi, len(pis))
+	copy(result, pis)
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].tone < result[j].tone
 	})
-
-	// Assign toneRank based on sorted order
-	for rank, cpy := range ranking {
-		pis[cpy.index].toneRank = rank
-	}
-
-	return pis
-}
-
-func tone(g *gif.GIF) []int {
-	tone := make([]int, 256)
-	for i, color := range g.Image[0].Palette {
-		r, g, b, _ := color.RGBA()
-		sum := r>>8 + g>>8 + b>>8
-		tone[i] = int(sum)
-	}
-	return tone
+	return result
 }
