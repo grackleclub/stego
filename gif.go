@@ -114,7 +114,7 @@ encoding:
 							return nil, fmt.Errorf("parse int: %w", err)
 						}
 						slog.Debug("writing hex", "value", dec, "frame", i, "x", x, "y", y)
-						newDataColor := paletteByTone[dec]
+						newDataColor := paletteByTone[dec+1]
 						img.Set(x, y, newDataColor.color)
 						currentChar++
 					}
@@ -150,7 +150,7 @@ extraction:
 					break extraction
 				}
 				if p.toneRank < floor {
-					char += fmt.Sprintf("%x", p.toneRank)
+					char += fmt.Sprintf("%x", p.toneRank-1)
 				}
 			}
 		}
