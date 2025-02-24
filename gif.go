@@ -106,27 +106,22 @@ func Encode(g *gif.GIF, data []byte) (*gif.GIF, error) {
 				index := pal.Index(img.At(x, y))
 				p := paletteByIndex[i][index]
 				paletteByTone := sortByTone(paletteByIndex[i])
-				if p.toneRank <= floor {
-					if currentNibble >= lastNibble { // TODO >= or > ?
-						// backfill with floor
-						if floor+1 < len(paletteByTone) {
-							img.Set(x, y, paletteByTone[floor+1].color)
-						} else {
-							slog.Warn("floor+1 exceeds paletteByTone length", "floor", floor, "length", len(paletteByTone))
-						}
-						// // backfill with floor
-						// img.Set(x, y, paletteByTone[floor+1].color)
-						// // TODO this would run much faster if we didn't "backfill"
-						// // one option is to use an end marker or otherwise encode data length
-						// // with headers or footers
-					} else {
-						// or write the next nibble
-						n := nibbles[currentNibble]
-						currentNibble++
-						// slog.Debug("writing nibble", "value", n, "frame", i, "x", x, "y", y)
-						newDataColor := paletteByTone[n]
-						img.Set(x, y, newDataColor.color)
-					}
+				if currentNibble > lastNibble {
+					continue
+				}
+				if currentNibble == lastNibble {
+					slog.Debug("writing last nibble", "value", nibbles[currentNibble], "frame", i, "x", x, "y", y)
+					newDataColor := paletteByTone[floor]
+					img.Set(x, y, newDataColor.color)
+					currentNibble++
+				}
+				if currentNibble <= lastNibble && p.toneRank < floor {
+					n := nibbles[currentNibble]
+					// slog.Debug("writing nibble", "value", n, "frame", i, "x", x, "y", y)
+					newDataColor := paletteByTone[n]
+					img.Set(x, y, newDataColor.color)
+					currentNibble++
+					continue
 				}
 			}
 		}
@@ -149,12 +144,16 @@ func Decode(g *gif.GIF) ([]byte, error) {
 	}
 
 	var nibbles []uint8
+extraction:
 	for i, img := range g.Image {
 		bounds := img.Bounds()
 		for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 			for x := bounds.Min.X; x < bounds.Max.X; x++ {
 				index := img.Palette.Index(img.At(x, y))
 				p := paletteByIndex[i][index]
+				if p.toneRank == floor {
+					break extraction
+				}
 				if p.toneRank <= floor {
 					// slog.Debug("reading nibble", "value", p.toneRank, "frame", i, "x", x, "y", y)
 					nibbles = append(nibbles, uint8(p.toneRank))
