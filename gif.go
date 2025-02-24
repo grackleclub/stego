@@ -122,6 +122,7 @@ encoding:
 			}
 		}
 	}
+	slog.Debug("encoded result", "data", char, "current", currentChar, "footer", footerChar)
 	if currentChar < footerChar {
 		return nil, fmt.Errorf("not enough space in gif to encode %d bytes", len(char))
 	}
