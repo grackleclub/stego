@@ -95,6 +95,7 @@ func Encode(g *gif.GIF, data []byte) (*gif.GIF, error) {
 	var currentNibble int
 	lastNibble := len(nibbles) - 1
 	// frame
+encoding:
 	for i, img := range g.Image {
 		bounds := img.Bounds()
 		pal := img.Palette
@@ -107,7 +108,7 @@ func Encode(g *gif.GIF, data []byte) (*gif.GIF, error) {
 				p := paletteByIndex[i][index]
 				paletteByTone := sortByTone(paletteByIndex[i])
 				if currentNibble > lastNibble {
-					continue
+					break encoding
 				}
 				if currentNibble == lastNibble {
 					slog.Debug("writing last nibble", "value", nibbles[currentNibble], "frame", i, "x", x, "y", y)
