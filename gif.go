@@ -113,7 +113,7 @@ encoding:
 						if err != nil {
 							return nil, fmt.Errorf("parse int: %w", err)
 						}
-						slog.Debug("writing hex", "value", dec, "frame", i, "x", x, "y", y)
+						// slog.Debug("writing hex", "value", dec, "frame", i, "x", x, "y", y)
 						newDataColor := paletteByTone[dec+1]
 						img.Set(x, y, newDataColor.color)
 						currentChar++
@@ -122,8 +122,8 @@ encoding:
 			}
 		}
 	}
-	slog.Debug("encoded result", "data", char, "current", currentChar, "footer", footerChar)
-	if currentChar < footerChar {
+	// slog.Debug("encoded result", "data", char, "current", currentChar, "footer", footerChar)
+	if currentChar <= footerChar {
 		return nil, fmt.Errorf("not enough space in gif to encode %d bytes", len(char))
 	}
 	return g, nil
@@ -156,6 +156,6 @@ extraction:
 			}
 		}
 	}
-	slog.Debug("decoded result", "data", char)
+	// slog.Debug("decoded result", "data", char)
 	return char, nil
 }

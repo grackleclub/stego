@@ -1,23 +1,19 @@
 package cryptogif
 
 import (
-	"bufio"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
-	"os"
 	"path"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
 var (
-	testSource  = path.Join("img", "earth.gif")
-	testWrite   = path.Join("img", "earth_write.gif")
-	testFailLog = path.Join("test.log")
+	testSource = path.Join("img", "earth.gif")
+	testWrite  = path.Join("img", "earth_write.gif")
 )
 
 func TestRead(t *testing.T) {
@@ -49,36 +45,8 @@ func TestNewSecret(t *testing.T) {
 	t.Logf("new secret: %x\n", secret)
 }
 
-// This function has intermittent failures, so I'm isolating if the palette.Index is non-deterministic,
-// or if there are certain bytes that can cause errors in encoding/decoding.
-func TestRetry(t *testing.T) {
-	var priorFailures []string
-	f, err := os.Open(testFailLog)
-	require.NoError(t, err)
-	defer f.Close()
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		line := scanner.Text()
-		parts := strings.Split(line, " ")
-		priorFailures = append(priorFailures, parts[0])
-	}
-
-	for i, fail := range priorFailures {
-		t.Run(fmt.Sprintf("prior-%d", i), func(t *testing.T) {
-			// t.Parallel()
-			g, err := Read(testSource)
-			require.NoError(t, err)
-			g, err = Encode(g, fail)
-			require.NoError(t, err)
-			bytes, err := Decode(g)
-			require.NoError(t, err)
-			require.Equal(t, string(fail), string(bytes))
-		})
-	}
-}
-
 func TestEncode(t *testing.T) {
-	bytes, err := newSecret(64)
+	bytes, err := newSecret(64) // TODO fails with 128
 	require.NoError(t, err)
 	b64 := base64.StdEncoding.EncodeToString(bytes)
 	input := hex.EncodeToString([]byte(b64))
