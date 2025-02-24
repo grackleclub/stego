@@ -52,6 +52,26 @@ func Read(file string) (*gif.GIF, error) {
 	return gif, nil
 }
 
+// Write encodes the gif as given, and writes it to the file at path.
+func Write(g *gif.GIF, path string) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return fmt.Errorf("create file %q: %w", path, err)
+	}
+	defer f.Close()
+
+	err = gif.EncodeAll(f, g)
+	if err != nil {
+		return fmt.Errorf("encode gif: %w", err)
+	}
+	info, err := f.Stat()
+	if err != nil {
+		return fmt.Errorf("stat file %q: %w", path, err)
+	}
+	slog.Debug("file written", "path", path, "size", info.Size())
+	return nil
+}
+
 // Encode first converts data to base64, then to nibbles,
 // altering the gif to provide a "floor" for cyphertext,
 // inserting data one nibble at a time until completion,
@@ -87,17 +107,23 @@ func Encode(g *gif.GIF, data []byte) (*gif.GIF, error) {
 				p := paletteByIndex[i][index]
 				paletteByTone := sortByTone(paletteByIndex[i])
 				if p.toneRank <= floor {
-					if currentNibble > lastNibble {
+					if currentNibble >= lastNibble { // TODO >= or > ?
 						// backfill with floor
-						img.Set(x, y, paletteByTone[floor+1].color)
-						// TODO this would run much faster if we didn't "backfill"
-						// one option is to use an end marker or otherwise encode data length
-						// with headers or footers
+						if floor+1 < len(paletteByTone) {
+							img.Set(x, y, paletteByTone[floor+1].color)
+						} else {
+							slog.Warn("floor+1 exceeds paletteByTone length", "floor", floor, "length", len(paletteByTone))
+						}
+						// // backfill with floor
+						// img.Set(x, y, paletteByTone[floor+1].color)
+						// // TODO this would run much faster if we didn't "backfill"
+						// // one option is to use an end marker or otherwise encode data length
+						// // with headers or footers
 					} else {
 						// or write the next nibble
 						n := nibbles[currentNibble]
 						currentNibble++
-						slog.Debug("writing nibble", "value", n, "frame", i, "x", x, "y", y)
+						// slog.Debug("writing nibble", "value", n, "frame", i, "x", x, "y", y)
 						newDataColor := paletteByTone[n]
 						img.Set(x, y, newDataColor.color)
 					}
@@ -111,31 +137,12 @@ func Encode(g *gif.GIF, data []byte) (*gif.GIF, error) {
 	return g, nil
 }
 
-// Write encodes the gif as given, and writes it to the file at path.
-func Write(g *gif.GIF, path string) error {
-	f, err := os.Create(path)
-	if err != nil {
-		return fmt.Errorf("create file %q: %w", path, err)
-	}
-	defer f.Close()
-
-	err = gif.EncodeAll(f, g)
-	if err != nil {
-		return fmt.Errorf("encode gif: %w", err)
-	}
-	info, err := f.Stat()
-	if err != nil {
-		return fmt.Errorf("stat file %q: %w", path, err)
-	}
-	slog.Debug("file written", "path", path, "size", info.Size())
-	return nil
-}
-
 // Decode reads the gif and decodes the data expecting the same as Encode:
 //   - base64 encoded data
 //   - crushed to nibbles
 //   - inserted into the gif at image palette[0] through palette[floor]
 func Decode(g *gif.GIF) ([]byte, error) {
+	slog.Info("decoding gif")
 	paletteByIndex, err := newPaletteInfo(g)
 	if err != nil {
 		return nil, fmt.Errorf("new palette info: %w", err)
@@ -149,7 +156,7 @@ func Decode(g *gif.GIF) ([]byte, error) {
 				index := img.Palette.Index(img.At(x, y))
 				p := paletteByIndex[i][index]
 				if p.toneRank <= floor {
-					slog.Debug("reading nibble", "value", p.toneRank, "frame", i, "x", x, "y", y)
+					// slog.Debug("reading nibble", "value", p.toneRank, "frame", i, "x", x, "y", y)
 					nibbles = append(nibbles, uint8(p.toneRank))
 				}
 			}

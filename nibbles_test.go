@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestBytesAndNibbles(t *testing.T) {
+func TestBytesAndNibbles(t *testing.T) {	
 	for secretLen := range 1028 {
 		t.Run(fmt.Sprintf("bytesNibs-%d", secretLen+1), func(t *testing.T) {
 			t.Parallel()

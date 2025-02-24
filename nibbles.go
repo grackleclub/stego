@@ -1,6 +1,7 @@
 package cryptogif
 
 import (
+	"encoding/base64"
 	"fmt"
 	"log/slog"
 )
@@ -34,7 +35,9 @@ func toBytes(nibbles []uint8) ([]byte, error) {
 		return nil, fmt.Errorf("empty nibble slice")
 	}
 	if len(nibbles)%2 != 0 {
-		return nil, fmt.Errorf("odd length nibble slice")
+		// return nil, fmt.Errorf("odd length nibble slice")
+		slog.Warn("odd length nibble slice", "len", len(nibbles))
+		nibbles = append(nibbles, uint8(base64.StdPadding))
 	}
 
 	var bytes []byte
