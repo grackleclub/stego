@@ -78,7 +78,7 @@ func TestRetry(t *testing.T) {
 }
 
 func TestEncode(t *testing.T) {
-	bytes, err := newSecret(4)
+	bytes, err := newSecret(128)
 	require.NoError(t, err)
 
 	b64 := base64.StdEncoding.EncodeToString(bytes)
