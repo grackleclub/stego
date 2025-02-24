@@ -2,12 +2,12 @@ package cryptogif
 
 import (
 	"bytes"
-	"encoding/base64"
 	"fmt"
 	"image/gif"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 )
 
@@ -15,7 +15,7 @@ import (
 // Of the up to 256 colors in each gif frame's palette, the darkest colors,
 // defined as ranked in tone below floor, are altered (assigned to the palette at floor+1),
 // leaving space below the floor for encoding data.
-var floor = 16
+var floor = 17
 
 func init() {
 	if testing.Testing() {
@@ -76,15 +76,8 @@ func Write(g *gif.GIF, path string) error {
 // altering the gif to provide a "floor" for cyphertext,
 // inserting data one nibble at a time until completion,
 // or exhaustion of the gif's capacity.
-func Encode(g *gif.GIF, data []byte) (*gif.GIF, error) {
-	b64 := base64.StdEncoding.EncodeToString(data)
-	slog.Debug("encoding to base64", "data", b64)
-
-	nibbles, err := toNibbles([]byte(b64))
-	if err != nil {
-		return nil, fmt.Errorf("to nibbles: %w", err)
-	}
-	slog.Debug("crushed bytes to nibbles", "nibbles", len(nibbles), "bytes", len(data))
+func Encode(g *gif.GIF, char string) (*gif.GIF, error) {
+	slog.Debug("encoding to hex", "data", char)
 	slog.Debug("palette homogeneity", "is_same", isCommonPalette(g))
 
 	paletteByIndex, err := newPaletteInfo(g)
@@ -92,10 +85,10 @@ func Encode(g *gif.GIF, data []byte) (*gif.GIF, error) {
 		return nil, fmt.Errorf("new palette info: %w", err)
 	}
 
-	var currentNibble int
-	lastNibble := len(nibbles) - 1
-	// frame
+	var currentChar int
+	footerChar := len(char)
 encoding:
+	// frame
 	for i, img := range g.Image {
 		bounds := img.Bounds()
 		pal := img.Palette
@@ -107,28 +100,30 @@ encoding:
 				index := pal.Index(img.At(x, y))
 				p := paletteByIndex[i][index]
 				paletteByTone := sortByTone(paletteByIndex[i])
-				if currentNibble > lastNibble {
-					break encoding
-				}
-				if currentNibble == lastNibble {
-					slog.Debug("writing last nibble", "value", nibbles[currentNibble], "frame", i, "x", x, "y", y)
-					newDataColor := paletteByTone[floor]
-					img.Set(x, y, newDataColor.color)
-					currentNibble++
-				}
-				if currentNibble <= lastNibble && p.toneRank < floor {
-					n := nibbles[currentNibble]
-					// slog.Debug("writing nibble", "value", n, "frame", i, "x", x, "y", y)
-					newDataColor := paletteByTone[n]
-					img.Set(x, y, newDataColor.color)
-					currentNibble++
-					continue
+				if p.toneRank < floor {
+					if currentChar == footerChar {
+						slog.Debug("writing floor", "frame", i, "x", x, "y", y)
+						newDataColor := paletteByTone[floor]
+						img.Set(x, y, newDataColor.color)
+						currentChar++
+						break encoding
+					} else if currentChar < footerChar {
+						n := char[currentChar]
+						dec, err := strconv.ParseInt(string(n), 16, 8)
+						if err != nil {
+							return nil, fmt.Errorf("parse int: %w", err)
+						}
+						slog.Debug("writing hex", "value", dec, "frame", i, "x", x, "y", y)
+						newDataColor := paletteByTone[dec]
+						img.Set(x, y, newDataColor.color)
+						currentChar++
+					}
 				}
 			}
 		}
 	}
-	if currentNibble < lastNibble {
-		return nil, fmt.Errorf("not enough space in gif to encode %d bytes", len(data))
+	if currentChar < footerChar {
+		return nil, fmt.Errorf("not enough space in gif to encode %d bytes", len(char))
 	}
 	return g, nil
 }
@@ -137,14 +132,14 @@ encoding:
 //   - base64 encoded data
 //   - crushed to nibbles
 //   - inserted into the gif at image palette[0] through palette[floor]
-func Decode(g *gif.GIF) ([]byte, error) {
-	slog.Info("decoding gif")
+func Decode(g *gif.GIF) (string, error) {
+	slog.Debug("decoding gif")
 	paletteByIndex, err := newPaletteInfo(g)
 	if err != nil {
-		return nil, fmt.Errorf("new palette info: %w", err)
+		return "", fmt.Errorf("new palette info: %w", err)
 	}
 
-	var nibbles []uint8
+	var char string
 extraction:
 	for i, img := range g.Image {
 		bounds := img.Bounds()
@@ -153,22 +148,15 @@ extraction:
 				index := img.Palette.Index(img.At(x, y))
 				p := paletteByIndex[i][index]
 				if p.toneRank == floor {
+					slog.Debug("found floor", "frame", i, "x", x, "y", y)
 					break extraction
 				}
-				if p.toneRank <= floor {
-					// slog.Debug("reading nibble", "value", p.toneRank, "frame", i, "x", x, "y", y)
-					nibbles = append(nibbles, uint8(p.toneRank))
+				if p.toneRank < floor {
+					char += fmt.Sprintf("%x", p.toneRank)
 				}
 			}
 		}
 	}
-	bytes, err := toBytes(nibbles)
-	if err != nil {
-		return nil, fmt.Errorf("to bytes: %w", err)
-	}
-	result, err := base64.StdEncoding.DecodeString(string(bytes))
-	if err != nil {
-		return nil, fmt.Errorf("decode base64: %w", err)
-	}
-	return result, nil
+	slog.Debug("decoded result", "data", char)
+	return char, nil
 }

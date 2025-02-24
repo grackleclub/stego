@@ -3,6 +3,8 @@ package cryptogif
 import (
 	"bufio"
 	"crypto/rand"
+	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path"
@@ -66,7 +68,7 @@ func TestRetry(t *testing.T) {
 			// t.Parallel()
 			g, err := Read(testSource)
 			require.NoError(t, err)
-			g, err = Encode(g, []byte(fail))
+			g, err = Encode(g, fail)
 			require.NoError(t, err)
 			bytes, err := Decode(g)
 			require.NoError(t, err)
@@ -76,37 +78,16 @@ func TestRetry(t *testing.T) {
 }
 
 func TestEncode(t *testing.T) {
+	bytes, err := newSecret(4)
+	require.NoError(t, err)
 
+	b64 := base64.StdEncoding.EncodeToString(bytes)
+	input := hex.EncodeToString([]byte(b64))
 	t.Run("validate", func(t *testing.T) {
-		expect, actual, err := EncodeDecode(testSource, 16)
+		actual, err := EncodeDecode(testSource, input)
 		require.NoError(t, err)
-		require.Equal(t, string(expect), string(actual))
+		require.Equal(t, input, actual)
 	})
-
-	// testDataLens := []int{512}
-	// // testDataLens := []int{1, 2, 3, 4, 5}
-	// // testDataLens := []int{1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144}
-	// // testDataLens := []int{128, 256, 512, 1024, 2048, 4096, 8192, 16384}
-	// for testNum, len := range testDataLens {
-	// 	t.Run(fmt.Sprintf("encode test-%d_len-%d)", testNum, len), func(t *testing.T) {
-	// 		// t.Parallel()
-	// 		expect, actual, err := EncodeDecode(testSource, len)
-	// 		require.NoError(t, err)
-	// 		// if string(expect) != string(actual) {
-	// 		// 	t.Logf("\nExpect: %x\nActual: %x\n", expect, actual)
-	// 		// 	// append to file
-	// 		// 	f, err := os.OpenFile(testFailLog, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	// 		// 	if err != nil {
-	// 		// 		t.Logf("open test case file: %v\n", err)
-	// 		// 	}
-	// 		// 	defer f.Close()
-	// 		// 	if _, err := f.WriteString(fmt.Sprintf("%x %x\n", expect, actual)); err != nil {
-	// 		// 		t.Logf("write test case file: %v\n", err)
-	// 		// 	}
-	// 		// }
-	// 		require.Equal(t, string(expect), string(actual))
-	// 	})
-	// }
 }
 
 func TestNewPI(t *testing.T) {
@@ -118,22 +99,18 @@ func TestNewPI(t *testing.T) {
 
 // EncodeDecode reads a gif, encodes a random secret, then decodes it,
 // returning the input and output secrets for comparison in a test context.
-func EncodeDecode(path string, len int) ([]byte, []byte, error) {
+func EncodeDecode(path string, input string) (string, error) {
 	g, err := Read(path)
 	if err != nil {
-		return nil, nil, fmt.Errorf("read: %w", err)
-	}
-	input, err := newSecret(len)
-	if err != nil {
-		return nil, nil, fmt.Errorf("new secret: %w", err)
+		return "", fmt.Errorf("read: %w", err)
 	}
 	gNew, err := Encode(g, input)
 	if err != nil {
-		return nil, nil, fmt.Errorf("encode: %w", err)
+		return "", fmt.Errorf("encode: %w", err)
 	}
 	output, err := Decode(gNew)
 	if err != nil {
-		return nil, nil, fmt.Errorf("decode: %w", err)
+		return "", fmt.Errorf("decode: %w", err)
 	}
-	return input, output, nil
+	return output, nil
 }
