@@ -129,8 +129,6 @@ encoding:
 }
 
 // Decode reads the gif and decodes the data expecting the same as Encode:
-//   - base64 encoded data
-//   - crushed to nibbles
 //   - inserted into the gif at image palette[0] through palette[floor]
 func Decode(g *gif.GIF) (string, error) {
 	slog.Debug("decoding gif")
