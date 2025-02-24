@@ -58,6 +58,24 @@ func TestEncode(t *testing.T) {
 	})
 }
 
+func TestPreview(t *testing.T) {
+	g, err := Read(testSource)
+	require.NoError(t, err)
+
+	t.Run("preview", func(t *testing.T) {
+		text := "hello, world!"
+		b64 := base64.StdEncoding.EncodeToString([]byte(text))
+		input := hex.EncodeToString([]byte(b64))
+
+		g, err := Encode(g, input)
+		require.NoError(t, err)
+		require.NotNil(t, g)
+
+		err = Write(g, testWrite)
+		require.NoError(t, err)
+	})
+}
+
 func TestNewPI(t *testing.T) {
 	g, err := Read(testSource)
 	require.NoError(t, err)
