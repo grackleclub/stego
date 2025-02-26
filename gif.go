@@ -14,7 +14,7 @@ import (
 // Of the up to 256 colors in each gif frame's palette, the darkest colors,
 // defined as ranked in tone below floor, are altered (assigned to the palette at floor+1),
 // leaving space below the floor for encoding data.
-var floor = 17
+const floor = 17
 
 func init() {
 	if testing.Testing() {
@@ -81,7 +81,9 @@ encoding:
 }
 
 // Extract reads the gif and decodes the data expecting the same as Encode:
-//   - inserted into the gif at image palette[0] through palette[floor]
+//   - inserted into the gif at image palette[1] through palette[floor]
+//
+// Note: palette[0] is often reserved for background)
 func Extract(g *gif.GIF) ([]byte, error) {
 	slog.Debug("decoding gif")
 	paletteByIndex, err := newPaletteInfo(g)
