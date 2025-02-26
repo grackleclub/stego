@@ -15,6 +15,12 @@ Each frame of a gif has a 256 bit color space. This tool reserves the darkest 16
 > [!WARNING]
 > This obfuscation tool is **not** a substitute for encryption.
 
+## examples
+
+original | embedded with "Hello, world!"
+--- | ---
+![original](./img/originals/earth.gif) | ![modified](./img/output/earth_output.gif)
+
 ### write data to a gif
 ```go
 // read the file
@@ -35,7 +41,3 @@ gif, _ := cryptogif.Read("./path/to/file.gif")
 data, _ := cryptogif.Extract(gif)
 fmt.Printf("extracted some data: %s", string(data))
 ```
-
-original | embedded with "Hello, world!"
---- | ---
-![original](./img/originals/earth.gif) | ![modified](./img/output/earth_output.gif)
