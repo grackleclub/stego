@@ -2,8 +2,6 @@ package cryptogif
 
 import (
 	"crypto/rand"
-	"encoding/base64"
-	"encoding/hex"
 	"fmt"
 	"path"
 	"testing"
@@ -12,21 +10,10 @@ import (
 )
 
 var (
-	testSource = path.Join("img", "earth.gif")
-	testWrite  = path.Join("img", "earth_write.gif")
+	testSource = path.Join("img", "originals", "earth.gif")
+	testWrite  = path.Join("img", "output", "earth_write.gif")
+	testOutput = path.Join("img", "output", "earth_output.gif")
 )
-
-func TestRead(t *testing.T) {
-	_, err := Read(testSource)
-	require.NoError(t, err)
-}
-
-func TestWrite(t *testing.T) {
-	g, err := Read(testSource)
-	require.NoError(t, err)
-	err = Write(g, testWrite)
-	require.NoError(t, err)
-}
 
 // newSecret generates a random secret of the given length, for testing.
 func newSecret(length int) ([]byte, error) {
@@ -48,55 +35,52 @@ func TestNewSecret(t *testing.T) {
 func TestEncode(t *testing.T) {
 	bytes, err := newSecret(64) // TODO fails with 128
 	require.NoError(t, err)
-	b64 := base64.StdEncoding.EncodeToString(bytes)
-	input := hex.EncodeToString([]byte(b64))
 
 	t.Run("validate", func(t *testing.T) {
-		actual, err := EncodeDecode(testSource, input)
+		actual, err := encodeDecode(testSource, bytes)
 		require.NoError(t, err)
-		require.Equal(t, input, actual)
+		require.Equal(t, string(bytes), string(actual))
 	})
 }
 
-func TestPreview(t *testing.T) {
-	g, err := Read(testSource)
+func TestLifecycle(t *testing.T) {
+	g, err := read(testSource)
 	require.NoError(t, err)
 
 	t.Run("preview", func(t *testing.T) {
-		text := "hello, world!"
-		b64 := base64.StdEncoding.EncodeToString([]byte(text))
-		input := hex.EncodeToString([]byte(b64))
-
-		g, err := Encode(g, input)
+		text := "Hello, world!"
+		g, err := Inject(g, []byte(text))
 		require.NoError(t, err)
 		require.NotNil(t, g)
 
-		err = Write(g, testWrite)
+		err = write(g, testOutput)
 		require.NoError(t, err)
+
+		new, err := read(testOutput)
+		require.NoError(t, err)
+		require.NotNil(t, new)
+
+		data, err := Extract(new)
+		t.Logf("output (str): %s\n", data)
+		require.NoError(t, err)
+		require.Equal(t, text, string(data))
 	})
 }
 
-func TestNewPI(t *testing.T) {
-	g, err := Read(testSource)
-	require.NoError(t, err)
-	_, err = newPaletteInfo(g)
-	require.NoError(t, err)
-}
-
-// EncodeDecode reads a gif, encodes a random secret, then decodes it,
+// encodeDecode reads a gif, encodes a random secret, then decodes it,
 // returning the input and output secrets for comparison in a test context.
-func EncodeDecode(path string, input string) (string, error) {
-	g, err := Read(path)
+func encodeDecode(path string, input []byte) (string, error) {
+	g, err := read(path)
 	if err != nil {
 		return "", fmt.Errorf("read: %w", err)
 	}
-	gNew, err := Encode(g, input)
+	gNew, err := Inject(g, input)
 	if err != nil {
 		return "", fmt.Errorf("encode: %w", err)
 	}
-	output, err := Decode(gNew)
+	output, err := Extract(gNew)
 	if err != nil {
 		return "", fmt.Errorf("decode: %w", err)
 	}
-	return output, nil
+	return string(output), nil
 }

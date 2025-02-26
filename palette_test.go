@@ -6,18 +6,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestNewPaletteInfo(t *testing.T) {
-	g, err := Read(testSource)
+func TestPaletteInfo(t *testing.T) {
+	g, err := read(testSource)
 	require.NoError(t, err)
 
-	pi, err := newPaletteInfo(g)
+	p, err := newPaletteInfo(g)
 	require.NoError(t, err)
-	require.NotNil(t, pi)
+	require.NotNil(t, p)
+	require.Greater(t, len(p), 0)
 
+	t.Logf("palette info: %v found\n", len(p))
 }
 
 func TestSortByTone(t *testing.T) {
-	g, err := Read(testSource)
+	g, err := read(testSource)
 	require.NoError(t, err)
 
 	pi, err := newPaletteInfo(g)
@@ -26,5 +28,4 @@ func TestSortByTone(t *testing.T) {
 
 	sorted := sortByTone(pi[0])
 	require.NotNil(t, sorted)
-
 }
