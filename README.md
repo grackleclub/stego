@@ -35,3 +35,7 @@ gif, _ := cryptogif.Read("./path/to/file.gif")
 data, _ := cryptogif.Extract(gif)
 fmt.Printf("extracted some data: %s", string(data))
 ```
+
+original | embedded with "Hello, world!"
+--- | ---
+![original](./img/originals/earth.gif) | ![modified](./img/output/earth_output.gif)
