@@ -44,7 +44,7 @@ func TestEncode(t *testing.T) {
 }
 
 func TestLifecycle(t *testing.T) {
-	g, err := read(testSource)
+	g, err := Read(testSource)
 	require.NoError(t, err)
 
 	t.Run("preview", func(t *testing.T) {
@@ -53,10 +53,10 @@ func TestLifecycle(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, g)
 
-		err = write(g, testOutput)
+		err = Write(g, testOutput)
 		require.NoError(t, err)
 
-		new, err := read(testOutput)
+		new, err := Read(testOutput)
 		require.NoError(t, err)
 		require.NotNil(t, new)
 
@@ -70,7 +70,7 @@ func TestLifecycle(t *testing.T) {
 // encodeDecode reads a gif, encodes a random secret, then decodes it,
 // returning the input and output secrets for comparison in a test context.
 func encodeDecode(path string, input []byte) (string, error) {
-	g, err := read(path)
+	g, err := Read(path)
 	if err != nil {
 		return "", fmt.Errorf("read: %w", err)
 	}

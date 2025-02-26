@@ -7,7 +7,7 @@ import (
 )
 
 func TestPaletteInfo(t *testing.T) {
-	g, err := read(testSource)
+	g, err := Read(testSource)
 	require.NoError(t, err)
 
 	p, err := newPaletteInfo(g)
@@ -19,7 +19,7 @@ func TestPaletteInfo(t *testing.T) {
 }
 
 func TestSortByTone(t *testing.T) {
-	g, err := read(testSource)
+	g, err := Read(testSource)
 	require.NoError(t, err)
 
 	pi, err := newPaletteInfo(g)

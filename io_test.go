@@ -7,13 +7,13 @@ import (
 )
 
 func TestRead(t *testing.T) {
-	_, err := read(testSource)
+	_, err := Read(testSource)
 	require.NoError(t, err)
 }
 
 func TestWrite(t *testing.T) {
-	g, err := read(testSource)
+	g, err := Read(testSource)
 	require.NoError(t, err)
-	err = write(g, testWrite)
+	err = Write(g, testWrite)
 	require.NoError(t, err)
 }
