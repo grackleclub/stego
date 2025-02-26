@@ -31,5 +31,5 @@ _ = cryptogif.Write(modifiedGif, "./path/to/new-file.gif")
 gif, _ := cryptogif.Read("./path/to/file.gif")
 // extract the data as a slice of bytes
 data, _ := cryptogif.Extract(gif)
-fmt.Printf("extracted some data: %s", string{data})
+fmt.Printf("extracted some data: %s", string(data))
 ```
