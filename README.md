@@ -15,15 +15,21 @@ Each frame of a gif has a 256 bit color space. This tool reserves the darkest 16
 
 ### write data to a gif
 ```go
+// read the file
 originalGif, _ := cryptogif.Read("./path/to/file.gif")
+// define some data as a slice of bytes
 myData := []byte("here's some arbitrary data!")
+// inject the data into a modified gif
 modifiedGif, _ := cryptogif.Inject(originalGif, myData)
-
+// write the new gif to file
 _ = cryptogif.Write(modifiedGif, "./path/to/new-file.gif")
 ```
 
 ### read data from a gif
 ```go
+// read the file
 gif, _ := cryptogif.Read("./path/to/file.gif")
+// extract the data as a slice of bytes
 data, _ := cryptogif.Extract(gif)
+fmt.Printf("extracted some data: %s", string{data})
 ```
