@@ -1,5 +1,7 @@
 # cryptogif
 
+[![Go Test](https://github.com/grackleclub/cryptogif/actions/workflows/go.yml/badge.svg)](https://github.com/grackleclub/cryptogif/actions/workflows/go.yml)
+
 Method for encoding very small amounts of data, with incredible ineffiency, into a gif's color palette assignment.
 
 ## why?
