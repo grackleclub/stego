@@ -1,4 +1,4 @@
-module github.com/grackleclub/cryptogif
+module github.com/grackleclub/stego
 
 go 1.23.0
 

@@ -1,6 +1,6 @@
-# cryptogif
+# stego
 
-[![Go Test](https://github.com/grackleclub/cryptogif/actions/workflows/go.yml/badge.svg)](https://github.com/grackleclub/cryptogif/actions/workflows/go.yml)
+[![Go Test](https://github.com/grackleclub/stego/actions/workflows/go.yml/badge.svg)](https://github.com/grackleclub/stego/actions/workflows/go.yml)
 
 Method for encoding very small amounts of data, with incredible ineffiency, into a gif's color palette assignment.
 
@@ -24,20 +24,20 @@ original | embedded with "Hello, world!"
 ### write data to a gif
 ```go
 // read the file
-originalGif, _ := cryptogif.Read("./path/to/file.gif")
+originalGif, _ := stego.Read("./path/to/file.gif")
 // define some data as a slice of bytes
 myData := []byte("here's some arbitrary data!")
 // inject the data into a modified gif
-modifiedGif, _ := cryptogif.Inject(originalGif, myData)
+modifiedGif, _ := stego.Inject(originalGif, myData)
 // write the new gif to file
-_ = cryptogif.Write(modifiedGif, "./path/to/new-file.gif")
+_ = stego.Write(modifiedGif, "./path/to/new-file.gif")
 ```
 
 ### read data from a gif
 ```go
 // read the file
-gif, _ := cryptogif.Read("./path/to/file.gif")
+gif, _ := stego.Read("./path/to/file.gif")
 // extract the data as a slice of bytes
-data, _ := cryptogif.Extract(gif)
+data, _ := stego.Extract(gif)
 fmt.Printf("extracted some data: %s", string(data))
 ```

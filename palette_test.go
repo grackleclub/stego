@@ -1,4 +1,4 @@
-package cryptogif
+package stego
 
 import (
 	"testing"
